@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AR Running Cat with Bee - Hiro Marker</title>
+
+  <!-- A-Frame -->
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+
+  <!-- AR.js -->
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: Arial, "Noto Sans Thai", sans-serif;
+    }
+
+    #ui {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      width: min(94vw, 560px);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    #status {
+      align-self: center;
+      padding: 9px 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.72);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      backdrop-filter: blur(8px);
+    }
+
+    #hint {
+      text-align: center;
+      color: white;
+      background: rgba(0,0,0,.56);
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    #cameraError {
+      display: none;
+      color: #fff;
+      background: rgba(190, 40, 40, .92);
+      padding: 10px 12px;
+      border-radius: 10px;
+      text-align: center;
+      font-size: 13px;
+    }
+  </style>
+
+  <script>
+    AFRAME.registerComponent('cat-bee-animation', {
+      init: function () {
+        this.cat = this.el.querySelector('#catRoot');
+        this.legs = [
+          this.el.querySelector('#legFL'),
+          this.el.querySelector('#legFR'),
+          this.el.querySelector('#legBL'),
+          this.el.querySelector('#legBR')
+        ];
+        this.tail = this.el.querySelector('#tail');
+        this.bee = this.el.querySelector('#beeRoot');
+
+        this.elapsed = 0;
+      },
+
+      tick: function (time, delta) {
+        if (!this.cat || !this.bee) return;
+
+        this.elapsed += delta / 1000;
+        const t = this.elapsed;
+
+        // แมววิ่งซ้าย-ขวาบน marker
+        const x = Math.sin(t * 1.6) * 0.55;
+        const bounce = Math.abs(Math.sin(t * 6.5)) * 0.08;
+
+        this.cat.object3D.position.x = x;
+        this.cat.object3D.position.y = 0.28 + bounce;
+
+        // ให้แมวหันไปตามทิศทางการวิ่ง
+        const direction = Math.cos(t * 1.6);
+        this.cat.object3D.scale.x = direction >= 0 ? 1 : -1;
+
+        // ขยับขาให้ดูเหมือนกำลังวิ่ง
+        const legSwing = Math.sin(t * 9) * 0.8;
+        if (this.legs[0]) this.legs[0].object3D.rotation.x = legSwing;
+        if (this.legs[1]) this.legs[1].object3D.rotation.x = -legSwing;
+        if (this.legs[2]) this.legs[2].object3D.rotation.x = -legSwing;
+        if (this.legs[3]) this.legs[3].object3D.rotation.x = legSwing;
+
+        // หางแกว่ง
+        if (this.tail) {
+          this.tail.object3D.rotation.z = Math.sin(t * 5) * 0.45;
+        }
+
+        // ผึ้งบินตามแมว เป็นวงเล็ก ๆ
+        const beeX = x - 0.42 * (direction >= 0 ? 1 : -1) + Math.cos(t * 5) * 0.10;
+        const beeY = 0.78 + Math.sin(t * 6) * 0.10;
+        const beeZ = Math.sin(t * 4) * 0.08;
+
+        this.bee.object3D.position.set(beeX, beeY, beeZ);
+
+        // กระพือปีก
+        const wingL = this.el.querySelector('#wingL');
+        const wingR = this.el.querySelector('#wingR');
+
+        if (wingL) wingL.object3D.rotation.z = 0.7 + Math.sin(t * 24) * 0.65;
+        if (wingR) wingR.object3D.rotation.z = -0.7 - Math.sin(t * 24) * 0.65;
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const marker = document.querySelector('#hiroMarker');
+      const status = document.querySelector('#status');
+      const cameraError = document.querySelector('#cameraError');
+
+      marker.addEventListener('markerFound', () => {
+        status.textContent = 'พบ Hiro marker แล้ว ✓';
+        status.style.background = 'rgba(18,135,78,.86)';
+      });
+
+      marker.addEventListener('markerLost', () => {
+        status.textContent = 'กำลังค้นหา Hiro marker...';
+        status.style.background = 'rgba(0,0,0,.72)';
+      });
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        cameraError.style.display = 'block';
+        cameraError.textContent =
+          'เบราว์เซอร์นี้ไม่รองรับการเปิดกล้อง กรุณาใช้ Chrome หรือ Safari รุ่นใหม่';
+      }
+
+      window.addEventListener('camera-error', () => {
+        cameraError.style.display = 'block';
+        cameraError.textContent =
+          'เปิดกล้องไม่ได้ กรุณาอนุญาตสิทธิ์ Camera แล้วรีเฟรชหน้าเว็บ';
+      });
+    });
+  </script>
+</head>
+
+<body>
+
+  <div id="ui">
+    <div id="status">กำลังเปิดกล้องและค้นหา Hiro marker...</div>
+
+    <div id="hint">
+      อนุญาตการใช้กล้อง แล้วหันกล้องไปที่ Hiro marker<br>
+      เมื่อตรวจพบ จะเห็นน้องแมววิ่งและมีผึ้งบินตาม
+    </div>
+
+    <div id="cameraError"></div>
+  </div>
+
+  <a-scene
+    embedded
+    vr-mode-ui="enabled: false"
+    renderer="antialias: true; logarithmicDepthBuffer: true;"
+    arjs="
+      sourceType: webcam;
+      facingMode: environment;
+      debugUIEnabled: false;
+      detectionMode: mono;
+    "
+  >
+
+    <a-marker
+      id="hiroMarker"
+      preset="hiro"
+      emitevents="true"
+      smooth="true"
+      smooth-count="6"
+      smooth-tolerance="0.01"
+      smooth-threshold="2"
+    >
+
+      <a-entity
+        cat-bee-animation
+        position="0 0 0"
+        rotation="-90 0 0"
+        scale="0.9 0.9 0.9"
+      >
+
+        <!-- ========================= -->
+        <!-- CAT -->
+        <!-- ========================= -->
+        <a-entity id="catRoot" position="0 0.28 0">
+
+          <!-- body -->
+          <a-sphere
+            position="0 0 0"
+            scale="0.46 0.28 0.28"
+            color="#F39A42">
+          </a-sphere>
+
+          <!-- chest -->
+          <a-sphere
+            position="0.22 0.04 0"
+            scale="0.22 0.25 0.25"
+            color="#F5A24B">
+          </a-sphere>
+
+          <!-- head -->
+          <a-sphere
+            position="0.43 0.19 0"
+            scale="0.23 0.23 0.23"
+            color="#F39A42">
+          </a-sphere>
+
+          <!-- ears -->
+          <a-cone
+            position="0.32 0.40 0.10"
+            radius-bottom="0.11"
+            height="0.18"
+            color="#F39A42"
+            rotation="0 0 -8">
+          </a-cone>
+
+          <a-cone
+            position="0.52 0.40 0.10"
+            radius-bottom="0.11"
+            height="0.18"
+            color="#F39A42"
+            rotation="0 0 8">
+          </a-cone>
+
+          <!-- face -->
+          <a-sphere
+            position="0.52 0.22 0.17"
+            radius="0.028"
+            color="#222">
+          </a-sphere>
+
+          <a-sphere
+            position="0.52 0.22 -0.17"
+            radius="0.028"
+            color="#222">
+          </a-sphere>
+
+          <a-sphere
+            position="0.61 0.14 0"
+            scale="0.035 0.026 0.035"
+            color="#E56B7A">
+          </a-sphere>
+
+          <!-- legs -->
+          <a-box
+            id="legFL"
+            position="0.22 -0.20 0.16"
+            width="0.10"
+            height="0.32"
+            depth="0.10"
+            color="#F39A42"
+            rotation="0 0 12">
+          </a-box>
+
+          <a-box
+            id="legFR"
+            position="0.22 -0.20 -0.16"
+            width="0.10"
+            height="0.32"
+            depth="0.10"
+            color="#F39A42"
+            rotation="0 0 -12">
+          </a-box>
+
+          <a-box
+            id="legBL"
+            position="-0.22 -0.20 0.16"
+            width="0.10"
+            height="0.32"
+            depth="0.10"
+            color="#F39A42"
+            rotation="0 0 -12">
+          </a-box>
+
+          <a-box
+            id="legBR"
+            position="-0.22 -0.20 -0.16"
+            width="0.10"
+            height="0.32"
+            depth="0.10"
+            color="#F39A42"
+            rotation="0 0 12">
+          </a-box>
+
+          <!-- tail -->
+          <a-entity id="tail" position="-0.45 0.10 0">
+            <a-cylinder
+              position="-0.22 0.10 0"
+              radius="0.055"
+              height="0.45"
+              rotation="0 0 68"
+              color="#F39A42">
+            </a-cylinder>
+
+            <a-sphere
+              position="-0.43 0.22 0"
+              radius="0.07"
+              color="#F39A42">
+            </a-sphere>
+          </a-entity>
+
+          <!-- stripes -->
+          <a-box
+            position="-0.05 0.18 0.245"
+            width="0.06"
+            height="0.18"
+            depth="0.025"
+            color="#C66B27">
+          </a-box>
+
+          <a-box
+            position="0.10 0.18 0.245"
+            width="0.06"
+            height="0.16"
+            depth="0.025"
+            color="#C66B27">
+          </a-box>
+
+        </a-entity>
+
+        <!-- ========================= -->
+        <!-- BEE -->
+        <!-- ========================= -->
+        <a-entity id="beeRoot" position="-0.4 0.8 0">
+
+          <!-- body -->
+          <a-sphere
+            position="0 0 0"
+            scale="0.16 0.11 0.11"
+            color="#F8C93A">
+          </a-sphere>
+
+          <!-- stripes -->
+          <a-box
+            position="-0.04 0 0.10"
+            width="0.035"
+            height="0.20"
+            depth="0.02"
+            color="#222">
+          </a-box>
+
+          <a-box
+            position="0.045 0 0.10"
+            width="0.035"
+            height="0.20"
+            depth="0.02"
+            color="#222">
+          </a-box>
+
+          <!-- head -->
+          <a-sphere
+            position="0.16 0.02 0"
+            radius="0.08"
+            color="#242424">
+          </a-sphere>
+
+          <!-- wings -->
+          <a-entity id="wingL" position="-0.02 0.10 0.03">
+            <a-sphere
+              position="-0.09 0.07 0"
+              scale="0.15 0.08 0.03"
+              color="#DDF4FF"
+              opacity="0.75"
+              transparent="true">
+            </a-sphere>
+          </a-entity>
+
+          <a-entity id="wingR" position="-0.02 0.10 -0.03">
+            <a-sphere
+              position="-0.09 0.07 0"
+              scale="0.15 0.08 0.03"
+              color="#DDF4FF"
+              opacity="0.75"
+              transparent="true">
+            </a-sphere>
+          </a-entity>
+
+        </a-entity>
+
+      </a-entity>
+
+    </a-marker>
+
+    <a-entity camera></a-entity>
+  </a-scene>
+
+</body>
+</html>
